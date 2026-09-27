@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2D datasets, learned with ABS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #EEF1F4;
+    --panel: #F8F9FB;
+    --ink: #16213A;
+    --muted: #5B6781;
+    --rule: #C9D1DC;
+    --c0: #2B55C9;   /* class 0 */
+    --c1: #E3A418;   /* class 1 */
+    --neg: #C8463D;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 40px; }
+  header h1 { font-size: clamp(28px, 4.4vw, 46px); line-height: 1.05; letter-spacing: -0.02em;
+    margin: 0 0 10px; font-weight: 700; }
+  header h1 .bar { display: inline-block; transform: scaleY(1.25); font-weight: 400; color: var(--muted); }
+  header p { margin: 0; max-width: 64ch; color: var(--muted); line-height: 1.55; font-size: 15px; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center;
+margin: 22px 0 18px; padding: 12px 0; border-top: 1px solid var(–rule); border-bottom: 1px solid var(–rule); }
+.btns { display: flex; gap: 8px; }
+.runbar { margin: 0 0 10px; }
+button { font: inherit; font-size: 14px; font-weight: 600; border: 1.5px solid var(–ink); background: transparent;
+color: var(–ink); padding: 7px 14px; border-radius: 6px; cursor: pointer; }
+button.primary { background: var(–ink); color: var(–paper); min-width: 84px; }
+button:hover { background: #dfe5ec; } button.primary:hover { background: #2a3858; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(–c1); outline-offset: 2px; }
+label.ctl { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(–muted); }
+label.ctl b { color: var(–ink); font-weight: 600; min-width: 2.2ch; display: inline-block; }
+input[type=range] { accent-color: var(–ink); width: 110px; }
+input[type=checkbox] { accent-color: var(–ink); width: 16px; height: 16px; margin: 0; }
+.sched { gap: 8px; }
+.status { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: #e1e6ed; color: var(–muted); }
+.status.done { background: var(–c1); color: var(–ink); }
+select:disabled { opacity: 0.45; cursor: not-allowed; }
+select { font: inherit; font-size: 14px; padding: 4px 6px; border: 1.5px solid var(–rule); border-radius: 6px; background: var(–panel); color: var(–ink); }
+
+.stats { display: flex; gap: 26px; margin-left: auto; font-size: 14px; color: var(–muted); }
+.stats span b { color: var(–ink); font-size: 17px; font-weight: 600; margin-left: 4px; }
+
+main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 22px; }
+.surface { background: var(–panel); border-radius: 10px; padding: 16px; }
+.surface h2, .side h2 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+.note { font-size: 13px; color: var(–muted); margin: 0 0 12px; line-height: 1.45; max-width: 60ch; }
+.square { position: relative; width: 100%; aspect-ratio: 1 / 1; }
+canvas { display: block; width: 100%; height: 100%; }
+.pointbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0 0 12px; font-size: 14px; color: var(–muted); }
+.seg { display: inline-flex; border: 1.5px solid var(–ink); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px; }
+.seg button + button { border-left: 1.5px solid var(–ink); }
+.seg button[aria-pressed=“true”] { background: var(–ink); color: var(–paper); }
+.pointbar .ghost { border-color: var(–rule); font-weight: 500; padding: 6px 12px; }
+#field { cursor: crosshair; touch-action: manipulation; }
+.tablewrap { max-height: 260px; overflow-y: auto; }
+thead th { position: sticky; top: 0; background: var(–paper); }
+td.empty { color: var(–muted); padding: 12px 6px; }
+.readout { font-size: 13px; color: var(–muted); margin-top: 8px; min-height: 1.3em; }
+
+.side { display: flex; flex-direction: column; gap: 22px; }
+.side section { border-top: 1px solid var(–rule); padding-top: 12px; }
+.side section:first-child { border-top: 0; padding-top: 0; }
+.net { height: 230px; } .loss { height: 170px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-weight: 500; color: var(–muted); padding: 4px 6px; border-bottom: 1px solid var(–rule); }
+td { padding: 6px; border-bottom: 1px solid #e1e6ed; }
+td.barcell { width: 45%; }
+.track { position: relative; height: 10px; background: #e1e6ed; border-radius: 5px; }
+.fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; }
+.mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(–muted); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 6px; }
+
+@media (max-width: 820px) {
+main { grid-template-columns: 1fr; }
+.stats { margin-left: 0; width: 100%; }
+}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>2D datasets, learned with ABS</h1>
+    <p>A two-layer perceptron trained by gradient descent, full-batch or stochastic, on the four XOR points. Every hidden
+      unit applies the absolute value, so it folds the input plane along a line instead of cutting it. Pick the loss and
+      the optimizer below.</p>
+  </header>
+
+  <div class="controls">
+    <label class="ctl">Hidden layers
+      <select id="layers">
+        <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
+      </select>
+    </label>
+    <label class="ctl">Units per layer <input id="hidden" type="range" min="1" max="10" value="10"> <b id="hiddenV">10</b></label>
+    <label class="ctl">Learning rate
+      <select id="lr">
+        <option selected>0.01</option><option>0.03</option><option>0.1</option><option>0.3</option><option>1</option>
+      </select>
+    </label>
+    <label class="ctl">Loss
+      <select id="lossSel">
+        <option value="bce">Binary cross-entropy</option>
+        <option value="mse" selected>Mean squared error</option>
+        <option value="mae">Mean absolute error</option>
+        <option value="focal">Focal (γ = 2)</option>
+        <option value="hinge">Hinge</option>
+        <option value="sqhinge">Squared hinge</option>
+      </select>
+    </label>
+    <label class="ctl">Batch
+      <select id="batch">
+        <option value="0">Full (GD)</option>
+        <option value="1" selected>1 (SGD)</option>
+        <option value="2">2</option>
+        <option value="4">4</option>
+        <option value="8">8</option>
+        <option value="16">16</option>
+      </select>
+    </label>
+    <label class="ctl">Sampling
+      <select id="sampling">
+        <option value="shuffle">Shuffled</option>
+        <option value="hardfirst">Hardest first</option>
+        <option value="prior" selected>Loss-weighted (repeats)</option>
+        <option value="ohem">Hardest only</option>
+      </select>
+    </label>
+    <label class="ctl">Momentum
+      <select id="mom">
+        <option value="0" selected>0</option><option value="0.5">0.5</option><option value="0.9">0.9</option>
+      </select>
+    </label>
+    <label class="ctl">Weight decay
+      <select id="wd">
+        <option value="0">0</option><option value="0.0001">0.0001</option><option value="0.001" selected>0.001</option>
+        <option value="0.01">0.01</option><option value="0.1">0.1</option>
+      </select>
+    </label>
+    <div class="ctl sched">
+      <label class="ctl"><input type="checkbox" id="autoDrop" checked> Drop decay to 0.0001 when loss &lt;</label>
+      <input id="thresh" type="range" min="0.01" max="0.3" step="0.005" value="0.1" aria-label="Loss threshold for decay drop">
+      <b id="threshV" style="min-width:5ch">0.100</b>
+      <span id="schedStatus" class="status">armed</span>
+    </div>
+    <label class="ctl">Parameter noise <input id="noise" type="range" min="0" max="0.01" step="0.0002" value="0.002"> <b id="noiseV" style="min-width:6ch">0.0020</b></label>
+    <label class="ctl">Steps per frame <input id="speed" type="range" min="1" max="100" value="100"> <b id="speedV">100</b></label>
+    <div class="stats">
+      <span>Step<b id="sStep">0</b></span>
+      <span>Epoch<b id="sEpoch">0</b></span>
+      <span>Loss<b id="sLoss">–</b></span>
+      <span>Points<b id="sPts">4</b></span>
+      <span>Accuracy<b id="sAcc">–</b></span>
+    </div>
+  </div>
+
+  <main>
+    <div class="surface">
+      <h2>Decision surface</h2>
+      <p class="note"><span id="surfNote">Color shows the sigmoid output, blue toward 0 and amber toward 1.</span>
+        Each dashed line is one hidden unit's fold, where its pre-activation is zero and |·| reflects it.
+        First-layer folds are straight; folds of deeper layers bend wherever an earlier fold has reflected the plane, and are drawn as finer dotted curves.
+        Click empty space to add a point of the chosen class; click a point to remove it. Misclassified points get a red ring.</p>
+      <div class="pointbar">
+        <span>New point class</span>
+        <div class="seg" role="group" aria-label="Class for new points">
+          <button id="cls0" aria-pressed="false"><span class="dot" style="background:var(--c0);margin:0"></span>0</button>
+          <button id="cls1" aria-pressed="true"><span class="dot" style="background:var(--c1);margin:0"></span>1</button>
+        </div>
+        <button id="restore" class="ghost">Restore XOR points</button>
+        <button id="clear" class="ghost">Clear all points</button>
+      </div>
+      <div class="btns runbar">
+        <button id="play" class="primary">Pause</button>
+        <button id="stepBtn">Step</button>
+        <button id="reset">Reinitialize</button>
+        <label class="ctl" style="margin-left:auto">Folds
+          <select id="foldSel">
+            <option value="all" selected>All layers</option>
+            <option value="first">First layer</option>
+            <option value="off">Off</option>
+          </select>
+        </label>
+      </div>
+      <div class="square"><canvas id="field" aria-label="Decision surface of the network"></canvas></div>
+      <div class="readout" id="readout">Hover the surface to read the output at any point. Shift-click adds the other class.</div>
+    </div>
+
+```
+<div class="side">
+  <section>
+    <h2>Network</h2>
+    <p class="note">Line thickness is weight magnitude. Solid lines are positive, red dashed lines are negative.</p>
+    <div class="net"><canvas id="net" aria-label="Network weights diagram"></canvas></div>
+  </section>
+  <section>
+    <h2>Loss over training</h2>
+    <p class="note" id="lossNote">Full-dataset loss after each update, log scale.</p>
+    <div class="loss"><canvas id="loss" aria-label="Loss curve, log scale"></canvas></div>
+  </section>
+  <section>
+    <h2>Predictions</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>x₁</th><th>x₂</th><th>Target</th><th id="outHead">Output</th><th></th><th title="How often this sample is picked, relative to uniform sampling">Picks</th></tr></thead>
+      <tbody id="preds"></tbody>
+    </table></div>
+  </section>
+</div>
+```
+
+  </main>
+</div>
+
+<script>
+(() => {
+  // ---------- data ----------
+  const XOR_X = [[0,0],[0,1],[1,0],[1,1]];
+  const XOR_Y = [0,1,1,0];
+  let X = XOR_X.map(p => p.slice());
+  let Y = XOR_Y.slice();
+  let addClass = 1;
+  let foldMode = 'all';   // which folds to draw: 'all', 'first', 'off'
+  const DOM = [-0.5, 1.5]; // plotted domain for both axes
+
+  // ---------- state ----------
+  let H = 10, NL = 1, lr = 0.01, spf = 100;   // H units in each of NL hidden layers
+  // layers[l] = { W: [out][in], b: [out], vW, vb, hidden }; hidden layers use |·|, the last layer is linear
+  let layers;
+  let step = 0, lastLoss = NaN;
+  let lossHist = [], histStride = 1, histCounter = 0;
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let running = !reduceMotion;
+
+  function mulberry32(a) {
+    return function() {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  function init() {
+    const r = mulberry32((Math.random() * 2**32) >>> 0);
+    const u = (s) => (r() * 2 - 1) * s;
+    // first layer: W ~ U[-1, 1]; deeper hidden layers: W ~ U[±√(3/fan_in)] (variance 1/fan_in, which
+    // preserves the signal's second moment through |·|); hidden biases ~ U[-0.5, 0.5];
+    // output layer: W ~ U[±1.5/√fan_in], bias 0
+    const sizes = [2, ...Array(NL).fill(H), 1];
+    layers = [];
+    for (let l = 0; l < sizes.length - 1; l++) {
+      const nin = sizes[l], nout = sizes[l + 1], hidden = l < NL;
+      const lim = l === 0 ? 1 : hidden ? Math.sqrt(3 / nin) : 1.5 / Math.sqrt(nin);
+      const W = [], b = [];
+      for (let i = 0; i < nout; i++) {
+        W.push(Array.from({ length: nin }, () => u(lim)));
+        b.push(hidden ? u(0.5) : 0);
+      }
+      layers.push({ W, b, hidden, vW: null, vb: null });
+    }
+    step = 0; lastLoss = NaN;
+    lossHist = []; histStride = 1; histCounter = 0; histStart = 0;
+    resetOptimizer();
+    resetSchedule();
+  }
+
+  const sigmoid = z => 1 / (1 + Math.exp(-z));
+
+  // ---------- loss functions ----------
+  // Each takes the raw output score z and the label y in {0,1}; returns [loss, dLoss/dz].
+  const LN = x => Math.log(Math.max(x, 1e-12));
+  const LOSSES = {
+    bce: {
+      name: 'Binary cross-entropy', linear: false,
+      f(z, y) { const p = sigmoid(z); return [-(y * LN(p) + (1 - y) * LN(1 - p)), p - y]; }
+    },
+    mse: {
+      name: 'Mean squared error', linear: false,
+      f(z, y) { const p = sigmoid(z), e = p - y; return [e * e, 2 * e * p * (1 - p)]; }
+    },
+    mae: {
+      name: 'Mean absolute error', linear: false,
+      f(z, y) { const p = sigmoid(z), e = p - y; return [Math.abs(e), Math.sign(e) * p * (1 - p)]; }
+    },
+    focal: {
+      name: 'Focal (γ = 2)', linear: false,
+      f(z, y) {
+        const g = 2, p = sigmoid(z), pt = y ? p : 1 - p, s = y ? 1 : -1, q = 1 - pt;
+        const L = -Math.pow(q, g) * LN(pt);
+        const dLdpt = g * Math.pow(q, g - 1) * LN(pt) - Math.pow(q, g) / Math.max(pt, 1e-12);
+        return [L, dLdpt * s * pt * q];
+      }
+    },
+    hinge: {
+      name: 'Hinge', linear: true,
+      f(z, y) { const t = y ? 1 : -1, m = 1 - t * z; return m > 0 ? [m, -t] : [0, 0]; }
+    },
+    sqhinge: {
+      name: 'Squared hinge', linear: true,
+      f(z, y) { const t = y ? 1 : -1, m = 1 - t * z; return m > 0 ? [m * m, -2 * t * m] : [0, 0]; }
+    },
+  };
+  let lossKey = 'mse';
+
+  // ---------- optimizer state ----------
+  let batchSize = 1;      // 0 = full batch (plain gradient descent)
+  let momentum = 0;
+  // decay schedule: drop weight decay to LATE_DECAY once the full-dataset loss falls below the threshold
+  const LATE_DECAY = 0.0001;
+  let autoDrop = true, dropThreshold = 0.1;
+  let decayDropped = false, decayBefore = null, dropStep = null, histStart = 0;
+
+  function setDecay(v) { weightDecay = v; document.getElementById('wd').value = String(v); }
+  function schedStatus() {
+    const el = document.getElementById('schedStatus');
+    if (!el) return;
+    if (decayDropped) { el.textContent = `dropped at step ${dropStep.toLocaleString()}`; el.className = 'status done'; }
+    else { el.textContent = autoDrop ? 'armed' : 'off'; el.className = 'status'; }
+  }
+  function checkSchedule() {
+    if (autoDrop && !decayDropped && weightDecay > LATE_DECAY && lastLoss < dropThreshold) {
+      decayBefore = weightDecay; setDecay(LATE_DECAY);
+      decayDropped = true; dropStep = step;
+      schedStatus();
+    }
+  }
+  function resetSchedule() {
+    if (decayDropped && decayBefore !== null) setDecay(decayBefore);
+    decayDropped = false; decayBefore = null; dropStep = null;
+    schedStatus();
+  }
+  let noiseStd = 0.002;   // std of Gaussian noise added to every weight and bias after each update
+  let weightDecay = 0.001;    // L2 penalty: hidden units decay (w, b) together; output weights decay; output bias does not
+  let order = [], cursor = 0, samplesSeen = 0;
+
+  function resetOptimizer() {
+    for (const L of layers) { L.vW = L.W.map(r => r.map(() => 0)); L.vb = L.b.map(() => 0); }
+    order = []; cursor = 0; samplesSeen = 0;
+  }
+
+  // standard normal sample (Box–Muller)
+  function gauss() {
+    let u = 0; while (u === 0) u = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * Math.random());
+  }
+
+  function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  }
+
+  // ---------- sample selection ----------
+  //  shuffle   : random order, each sample once per epoch
+  //  hardfirst : each epoch, visit samples in order of current loss, highest first (each once)
+  //  prior     : draw with replacement, P(i) ∝ loss_i + ε, so hard samples repeat within an epoch
+  //  ohem      : every step, take the B samples with the highest current loss
+  let sampling = 'prior';
+  let pickRate = [];          // EMA of how often each sample is picked, per step
+  const PICK_EMA = 0.98;
+
+  function perSampleLoss() {
+    const f = LOSSES[lossKey].f;
+    return X.map((x, n) => f(score(x[0], x[1]), Y[n])[0]);
+  }
+
+  function nextBatch(N) {
+    const B = batchSize === 0 ? N : Math.min(batchSize, N);
+    if (B === N) return [...Array(N).keys()];
+    const idx = [];
+    if (sampling === 'prior') {
+      const L = perSampleLoss(), eps = 1e-3;
+      const cum = []; let tot = 0;
+      for (const l of L) { tot += l + eps; cum.push(tot); }
+      for (let k = 0; k < B; k++) {
+        const r = Math.random() * tot;
+        let i = 0; while (cum[i] < r) i++;
+        idx.push(i);
+      }
+      return idx;
+    }
+    if (sampling === 'ohem') {
+      const L = perSampleLoss();
+      // shuffle first so ties (e.g. zero hinge loss) are broken randomly
+      return shuffle([...Array(N).keys()]).sort((a, b) => L[b] - L[a]).slice(0, B);
+    }
+    while (idx.length < B) {
+      if (cursor >= order.length || order.length !== N) {
+        order = shuffle([...Array(N).keys()]);
+        if (sampling === 'hardfirst') { const L = perSampleLoss(); order.sort((a, b) => L[b] - L[a]); }
+        cursor = 0;
+      }
+      idx.push(order[cursor++]);
+    }
+    return idx;
+  }
+
+  function trackPicks(batch, N) {
+    const uniform = batch.length / N;
+    if (pickRate.length !== N) pickRate = new Array(N).fill(uniform);
+    const cnt = new Array(N).fill(0);
+    for (const n of batch) cnt[n]++;
+    for (let n = 0; n < N; n++) pickRate[n] = PICK_EMA * pickRate[n] + (1 - PICK_EMA) * cnt[n];
+  }
+
+  // Forward pass. If cache is given, stores cache.ins[l] (input to layer l) and cache.pres[l] (its pre-activations).
+  function score(x0, x1, cache) {
+    let inp = [x0, x1];
+    if (cache) { cache.ins = [inp]; cache.pres = []; }
+    for (let l = 0; l < layers.length; l++) {
+      const { W, b, hidden } = layers[l];
+      const out = new Array(W.length), pre = cache ? new Array(W.length) : null;
+      for (let i = 0; i < W.length; i++) {
+        const Wi = W[i]; let a = b[i];
+        for (let j = 0; j < inp.length; j++) a += Wi[j] * inp[j];
+        if (pre) pre[i] = a;
+        out[i] = hidden ? Math.abs(a) : a;   // abs activation on hidden layers
+      }
+      if (cache) { cache.pres.push(pre); cache.ins.push(out); }
+      inp = out;
+    }
+    return inp[0];
+  }
+  // Used by the visuals: sigmoid of the score (for hinge losses this is just a squashed margin).
+  const forward = (x0, x1) => sigmoid(score(x0, x1));
+
+  function fullLoss() {
+    const N = X.length; if (!N) return NaN;
+    const f = LOSSES[lossKey].f; let L = 0;
+    for (let n = 0; n < N; n++) L += f(score(X[n][0], X[n][1]), Y[n])[0];
+    return L / N;
+  }
+
+  function trainStep() {
+    const N = X.length;
+    if (N === 0) return;
+    const grads = layers.map(L => ({ gW: L.W.map(r => r.map(() => 0)), gb: L.b.map(() => 0) }));
+    const f = LOSSES[lossKey].f;
+    const batch = nextBatch(N), B = batch.length;
+    const cache = {};
+    for (const n of batch) {
+      const [x0, x1] = X[n], y = Y[n];
+      const z = score(x0, x1, cache);
+      let delta = [f(z, y)[1]];        // dL/d(pre-activation) of the current layer, starting at the output
+      for (let l = layers.length - 1; l >= 0; l--) {
+        const inp = cache.ins[l], W = layers[l].W, g = grads[l];
+        for (let i = 0; i < W.length; i++) {
+          g.gb[i] += delta[i];
+          for (let j = 0; j < inp.length; j++) g.gW[i][j] += delta[i] * inp[j];
+        }
+        if (l > 0) {                   // backprop into the previous hidden layer
+          const pre = cache.pres[l - 1], nd = new Array(inp.length).fill(0);
+          for (let i = 0; i < W.length; i++) for (let j = 0; j < inp.length; j++) nd[j] += W[i][j] * delta[i];
+          for (let j = 0; j < nd.length; j++) nd[j] *= Math.sign(pre[j]);   // d|a|/da = sign(a)
+          delta = nd;
+        }
+      }
+    }
+    // (heavy-ball) momentum; momentum = 0 is vanilla (S)GD
+    // weight decay adds λ·θ to the gradient (L2 penalty λ/2·‖θ‖²).
+    // Each hidden unit decays its (w, b) together, so decay shrinks the unit uniformly and never moves its
+    // fold (the zero set of its pre-activation is unchanged). The output bias is not decayed.
+    // Parameter noise: independent N(0, σ²) kick to every weight and bias after the update.
+    const upd = (v, g) => momentum * v - lr * g / B;
+    const updW = (v, g, w) => momentum * v - lr * (g / B + weightDecay * w);
+    layers.forEach((L, l) => {
+      const g = grads[l];
+      for (let i = 0; i < L.W.length; i++) {
+        const Wi = L.W[i], vWi = L.vW[i], gWi = g.gW[i];
+        for (let j = 0; j < Wi.length; j++) {
+          vWi[j] = updW(vWi[j], gWi[j], Wi[j]); Wi[j] += vWi[j];
+          if (noiseStd > 0) Wi[j] += noiseStd * gauss();
+        }
+        L.vb[i] = L.hidden ? updW(L.vb[i], g.gb[i], L.b[i]) : upd(L.vb[i], g.gb[i]);
+        L.b[i] += L.vb[i];
+        if (noiseStd > 0) L.b[i] += noiseStd * gauss();
+      }
+    });
+    step++; samplesSeen += B;
+    trackPicks(batch, N);
+    if (++histCounter >= histStride) {
+      histCounter = 0;
+      lastLoss = fullLoss();
+      lossHist.push(lastLoss);
+      checkSchedule();
+      if (lossHist.length >= 1200) {             // keep history bounded
+        lossHist = lossHist.filter((_, i) => i % 2 === 0);
+        histStride *= 2;
+      }
+    }
+  }
+
+  // ---------- canvas helpers ----------
+  const css = getComputedStyle(document.documentElement);
+  const C = {
+    ink: css.getPropertyValue('--ink').trim(), muted: css.getPropertyValue('--muted').trim(),
+    rule: css.getPropertyValue('--rule').trim(), c0: css.getPropertyValue('--c0').trim(),
+    c1: css.getPropertyValue('--c1').trim(), neg: css.getPropertyValue('--neg').trim(),
+    panel: css.getPropertyValue('--panel').trim()
+  };
+  const hex = s => [1,3,5].map(i => parseInt(s.slice(i, i+2), 16));
+  const RGB0 = hex(C.c0), RGB1 = hex(C.c1), RGBM = [246, 244, 238];
+
+  function fit(canvas) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+      canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    }
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return [ctx, w, h];
+  }
+
+  // ---------- decision surface ----------
+  const field = document.getElementById('field');
+  const RES = 72;
+  const off = document.createElement('canvas'); off.width = off.height = RES;
+  const offCtx = off.getContext('2d');
+  const img = offCtx.createImageData(RES, RES);
+
+  function colorFor(p) {
+    // blue -> pale -> amber
+    let a, b, t;
+    if (p < 0.5) { a = RGB0; b = RGBM; t = p / 0.5; } else { a = RGBM; b = RGB1; t = (p - 0.5) / 0.5; }
+    return [a[0] + (b[0]-a[0])*t, a[1] + (b[1]-a[1])*t, a[2] + (b[2]-a[2])*t];
+  }
+
+  const span = DOM[1] - DOM[0];
+  function drawField() {
+    const [ctx, w, h] = fit(field);
+    const pad = 28, S = Math.min(w, h) - pad - 8;
+    const ox = pad, oy = 4;
+    const toPx = (x, y) => [ox + (x - DOM[0]) / span * S, oy + (1 - (y - DOM[0]) / span) * S];
+
+    for (let j = 0; j < RES; j++) {
+      const y = DOM[1] - (j + 0.5) / RES * span;
+      for (let i = 0; i < RES; i++) {
+        const x = DOM[0] + (i + 0.5) / RES * span;
+        const c = colorFor(forward(x, y));
+        const k = (j * RES + i) * 4;
+        img.data[k] = c[0]; img.data[k+1] = c[1]; img.data[k+2] = c[2]; img.data[k+3] = 255;
+      }
+    }
+    offCtx.putImageData(img, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(off, ox, oy, S, S);
+
+    // grid of pre-activations (for bent deeper-layer folds) and output scores (for the decision contour)
+    const G = 60, GP = G + 1;
+    const zGrid = new Float32Array(GP * GP);
+    const deep = foldMode === 'all' && NL > 1;
+    const preGrid = deep ? Array.from({ length: NL - 1 }, () => Array.from({ length: H }, () => new Float32Array(GP * GP))) : null;
+    const cache = {};
+    for (let j = 0; j < GP; j++) for (let i = 0; i < GP; i++) {
+      const k = j * GP + i;
+      zGrid[k] = score(DOM[0] + i / G * span, DOM[0] + j / G * span, deep ? cache : null);
+      if (deep) for (let l = 1; l < NL; l++) for (let u = 0; u < H; u++) preGrid[l - 1][u][k] = cache.pres[l][u];
+    }
+    // marching squares: add the zero-level segments of a grid to the current path
+    const contour = (vals) => {
+      for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) {
+        const v = [vals[j*GP+i], vals[j*GP+i+1], vals[(j+1)*GP+i+1], vals[(j+1)*GP+i]];
+        const corners = [[i,j],[i+1,j],[i+1,j+1],[i,j+1]];
+        const pts = [];
+        for (let e = 0; e < 4; e++) {
+          const a = v[e], b = v[(e+1)%4];
+          if ((a > 0) !== (b > 0)) {
+            const t = a / (a - b), ca = corners[e], cb = corners[(e+1)%4];
+            pts.push([ca[0] + (cb[0]-ca[0])*t, ca[1] + (cb[1]-ca[1])*t]);
+          }
+        }
+        for (let k = 0; k + 1 < pts.length; k += 2) {
+          const a = toPx(DOM[0] + pts[k][0]/G*span, DOM[0] + pts[k][1]/G*span);
+          const b = toPx(DOM[0] + pts[k+1][0]/G*span, DOM[0] + pts[k+1][1]/G*span);
+          ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+        }
+      }
+    };
+
+    // deeper-layer folds: bent curves where a deeper unit's pre-activation is zero
+    ctx.save();
+    ctx.beginPath(); ctx.rect(ox, oy, S, S); ctx.clip();
+    if (deep) {
+      ctx.lineWidth = 1.2; ctx.setLineDash([1.5, 3]);
+      for (let l = 1; l < NL; l++) {
+        ctx.strokeStyle = `rgba(22,33,58,${0.7 - 0.12 * (l - 1)})`;
+        ctx.beginPath();
+        for (let u = 0; u < H; u++) contour(preGrid[l - 1][u]);
+        ctx.stroke();
+      }
+    }
+    // first-layer folds: straight lines
+    ctx.setLineDash([6, 5]); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(22,33,58,0.75)';
+    const W0 = layers[0].W, B0 = layers[0].b;
+    for (let i = 0; i < (foldMode === 'off' ? 0 : H); i++) {
+      const [wa, wb] = W0[i], bb = B0[i];
+      let p1, p2;
+      if (Math.abs(wb) > Math.abs(wa)) {
+        p1 = [DOM[0], -(wa*DOM[0] + bb) / wb]; p2 = [DOM[1], -(wa*DOM[1] + bb) / wb];
+      } else if (Math.abs(wa) > 1e-9) {
+        p1 = [-(wb*DOM[0] + bb) / wa, DOM[0]]; p2 = [-(wb*DOM[1] + bb) / wa, DOM[1]];
+      } else continue;
+      const a = toPx(...p1), b = toPx(...p2);
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    }
+    ctx.restore();
+
+    // decision contour: score = 0, i.e. σ(score) = 0.5
+    ctx.save();
+    ctx.beginPath(); ctx.rect(ox, oy, S, S); ctx.clip();
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.setLineDash([]);
+    ctx.beginPath(); contour(zGrid); ctx.stroke();
+    ctx.restore();
+
+    // axes ticks
+    ctx.fillStyle = C.muted; ctx.font = '12px "IBM Plex Sans", sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (const t of [0, 1]) { const [px] = toPx(t, 0); ctx.fillText(t, px, oy + S + 6); }
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (const t of [0, 1]) { const [, py] = toPx(0, t); ctx.fillText(t, ox - 8, py); }
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('x₁', ox + S - 14, oy + S + 6);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'top'; ctx.fillText('x₂', ox - 8, oy + 2);
+
+    // data points
+    const pr = X.length > 12 ? 7 : 10;
+    for (let n = 0; n < X.length; n++) {
+      const [px, py] = toPx(X[n][0], X[n][1]);
+      const wrong = (forward(X[n][0], X[n][1]) > 0.5 ? 1 : 0) !== Y[n];
+      ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2);
+      ctx.fillStyle = Y[n] ? C.c1 : C.c0; ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke();
+      ctx.lineWidth = wrong ? 2.5 : 1.5; ctx.strokeStyle = wrong ? C.neg : C.ink;
+      ctx.beginPath(); ctx.arc(px, py, pr + 1.5, 0, Math.PI * 2); ctx.stroke();
+    }
+    field._map = { ox, oy, S };
+  }
+
+  const readout = document.getElementById('readout');
+  field.addEventListener('mousemove', e => {
+    const m = field._map; if (!m) return;
+    const r = field.getBoundingClientRect();
+    const px = e.clientX - r.left, py = e.clientY - r.top;
+    if (px < m.ox || px > m.ox + m.S || py < m.oy || py > m.oy + m.S) { readout.textContent = ''; return; }
+    const x = DOM[0] + (px - m.ox) / m.S * span, y = DOM[1] - (py - m.oy) / m.S * span;
+    readout.textContent = `At (${x.toFixed(2)}, ${y.toFixed(2)}) the network outputs ${forward(x, y).toFixed(3)}`;
+  });
+  field.addEventListener('mouseleave', () => readout.textContent = 'Hover the surface to read the output at any point. Shift-click adds the other class.');
+
+  // ---------- add / remove points by clicking ----------
+  function dataChanged() { pickRate = []; buildTable(); drawAll(); }
+  field.addEventListener('click', e => {
+    const m = field._map; if (!m) return;
+    const r = field.getBoundingClientRect();
+    const px = e.clientX - r.left, py = e.clientY - r.top;
+    if (px < m.ox || px > m.ox + m.S || py < m.oy || py > m.oy + m.S) return;
+    // remove the nearest point if the click lands on it
+    let best = -1, bestD = Infinity;
+    X.forEach(([x, y], n) => {
+      const qx = m.ox + (x - DOM[0]) / span * m.S, qy = m.oy + (1 - (y - DOM[0]) / span) * m.S;
+      const d = Math.hypot(qx - px, qy - py);
+      if (d < bestD) { bestD = d; best = n; }
+    });
+    if (best >= 0 && bestD <= 13) {
+      X.splice(best, 1); Y.splice(best, 1);
+    } else {
+      const x = DOM[0] + (px - m.ox) / m.S * span, y = DOM[1] - (py - m.oy) / m.S * span;
+      X.push([x, y]); Y.push(e.shiftKey ? 1 - addClass : addClass);
+    }
+    dataChanged();
+  });
+
+  const cls0 = document.getElementById('cls0'), cls1 = document.getElementById('cls1');
+  const setClass = c => { addClass = c; cls0.setAttribute('aria-pressed', c === 0); cls1.setAttribute('aria-pressed', c === 1); };
+  cls0.onclick = () => setClass(0);
+  cls1.onclick = () => setClass(1);
+  document.getElementById('restore').onclick = () => { X = XOR_X.map(p => p.slice()); Y = XOR_Y.slice(); dataChanged(); };
+  document.getElementById('clear').onclick = () => { X = []; Y = []; lastLoss = NaN; dataChanged(); };
+
+  // ---------- network diagram ----------
+  const net = document.getElementById('net');
+  function drawNet() {
+    const [ctx, w, h] = fit(net);
+    ctx.clearRect(0, 0, w, h);
+    const cols = NL + 2;
+    const xs = Array.from({ length: cols }, (_, c) => w * (0.08 + 0.84 * c / (cols - 1)));
+    const ys = (n) => Array.from({ length: n }, (_, i) => h * (i + 1) / (n + 1));
+    const colY = [ys(2), ...Array.from({ length: NL }, () => ys(H)), [h / 2]];
+    let maxW = 1e-6;   // per-layer normalization, recomputed in the loop below
+    const edge = (x1, y1, x2, y2, v) => {
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+      ctx.lineWidth = 0.4 + (NL > 1 ? 3.5 : 5) * Math.abs(v) / maxW;
+      if (v >= 0) { ctx.setLineDash([]); ctx.strokeStyle = 'rgba(22,33,58,0.8)'; }
+      else { ctx.setLineDash([5, 4]); ctx.strokeStyle = C.neg; }
+      ctx.stroke();
+    };
+    layers.forEach((L, l) => {
+      maxW = 1e-6;
+      L.W.forEach(r => r.forEach(v => maxW = Math.max(maxW, Math.abs(v))));
+      for (let i = 0; i < L.W.length; i++) for (let j = 0; j < L.W[i].length; j++)
+        edge(xs[l], colY[l][j], xs[l + 1], colY[l + 1][i], L.W[i][j]);
+    });
+    ctx.setLineDash([]);
+    const R = Math.max(5, Math.min(18, h / (2 * (H + 1)) - 2, w / cols / 4));
+    const node = (x, y, label) => {
+      ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2);
+      ctx.fillStyle = C.panel; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = C.ink; ctx.stroke();
+      ctx.fillStyle = C.ink; ctx.font = `600 ${Math.max(10, R * 0.75)}px "IBM Plex Sans", sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label, x, y + 1);
+    };
+    node(xs[0], colY[0][0], 'x₁'); node(xs[0], colY[0][1], 'x₂');
+    for (let l = 1; l <= NL; l++) colY[l].forEach(y => node(xs[l], y, '|·|'));
+    node(xs[cols - 1], colY[cols - 1][0], 'σ');
+  }
+
+  // ---------- loss plot ----------
+  const lossC = document.getElementById('loss');
+  function drawLoss() {
+    const [ctx, w, h] = fit(lossC);
+    ctx.clearRect(0, 0, w, h);
+    const l = 40, r = 8, t = 8, b = 22, pw = w - l - r, ph = h - t - b;
+    ctx.strokeStyle = C.rule; ctx.lineWidth = 1;
+    ctx.font = '11px "IBM Plex Sans", sans-serif'; ctx.fillStyle = C.muted;
+    if (lossHist.length < 2) {
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('Press Play or Step to start training', w / 2, h / 2); return;
+    }
+    const logs = lossHist.map(v => Math.log10(Math.max(v, 1e-6)));
+    let lo = Math.floor(Math.min(...logs)), hi = Math.ceil(Math.max(...logs));
+    if (hi === lo) hi = lo + 1;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let e = lo; e <= hi; e++) {
+      const y = t + (hi - e) / (hi - lo) * ph;
+      ctx.beginPath(); ctx.moveTo(l, y); ctx.lineTo(l + pw, y); ctx.stroke();
+      ctx.fillText(e === 0 ? '1' : `1e${e}`, l - 6, y);
+    }
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('0', l, t + ph + 6);
+    ctx.textAlign = 'right'; ctx.fillText(`${step} steps`, l + pw, t + ph + 6);
+    ctx.beginPath();
+    logs.forEach((v, i) => {
+      const x = l + i / (logs.length - 1) * pw, y = t + (hi - v) / (hi - lo) * ph;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    });
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 1.8; ctx.stroke();
+
+    // schedule markers: threshold line while armed, vertical line where decay dropped
+    ctx.save(); ctx.setLineDash([4, 4]); ctx.lineWidth = 1.2; ctx.font = '11px "IBM Plex Sans", sans-serif';
+    if (autoDrop && !decayDropped && weightDecay > LATE_DECAY) {
+      const v = Math.log10(dropThreshold);
+      if (v >= lo && v <= hi) {
+        const y = t + (hi - v) / (hi - lo) * ph;
+        ctx.strokeStyle = C.c1; ctx.beginPath(); ctx.moveTo(l, y); ctx.lineTo(l + pw, y); ctx.stroke();
+        ctx.fillStyle = C.muted; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+        ctx.fillText('decay drop threshold', l + pw, y - 2);
+      }
+    }
+    if (dropStep !== null && dropStep >= histStart && step > histStart) {
+      const x = l + (dropStep - histStart) / (step - histStart) * pw;
+      ctx.strokeStyle = C.c1; ctx.beginPath(); ctx.moveTo(x, t); ctx.lineTo(x, t + ph); ctx.stroke();
+      ctx.fillStyle = C.muted; ctx.textAlign = x > l + pw * 0.6 ? 'right' : 'left'; ctx.textBaseline = 'top';
+      ctx.fillText('decay → 0.0001', x + (ctx.textAlign === 'left' ? 4 : -4), t + 2);
+    }
+    ctx.restore();
+  }
+
+  // ---------- predictions table + stats ----------
+  const preds = document.getElementById('preds');
+  const sStep = document.getElementById('sStep'), sLoss = document.getElementById('sLoss'), sAcc = document.getElementById('sAcc');
+  const fmt = v => Number.isInteger(v) ? String(v) : v.toFixed(2);
+  function buildTable() {
+  preds.innerHTML = X.length === 0
+    ? `<tr><td colspan="5" class="empty">No points. Click the surface to add some.</td></tr>`
+    : X.map((x, n) => `<tr>
+    <td>${fmt(x[0])}</td><td>${fmt(x[1])}</td>
+    <td><span class="dot" style="background:${Y[n] ? C.c1 : C.c0}"></span>${Y[n]}</td>
+    <td id="pv${n}">–</td>
+    <td class="barcell"><div class="track"><div class="fill" id="pb${n}"></div><div class="mid"></div></div></td>
+    <td id="pr${n}">–</td></tr>`).join('');
+  }
+  buildTable();
+
+  function drawStats() {
+    let correct = 0;
+    for (let n = 0; n < X.length; n++) {
+      const p = forward(X[n][0], X[n][1]);
+      if ((p > 0.5 ? 1 : 0) === Y[n]) correct++;
+      const uni = (batchSize === 0 ? X.length : Math.min(batchSize, X.length)) / X.length;
+      document.getElementById('pr' + n).textContent =
+        pickRate.length === X.length ? (pickRate[n] / uni).toFixed(1) + '×' : '1.0×';
+      document.getElementById('pv' + n).textContent =
+        LOSSES[lossKey].linear ? score(X[n][0], X[n][1]).toFixed(2) : p.toFixed(3);
+      const bar = document.getElementById('pb' + n);
+      bar.style.width = (p * 100).toFixed(1) + '%';
+      const c = colorFor(p); bar.style.background = `rgb(${c.map(Math.round).join(',')})`;
+    }
+    sStep.textContent = step.toLocaleString();
+    document.getElementById('sEpoch').textContent = X.length ? (samplesSeen / X.length).toFixed(1) : '0';
+    lastLoss = fullLoss();
+    sLoss.textContent = isNaN(lastLoss) ? '–' : lastLoss < 1e-3 ? lastLoss.toExponential(2) : lastLoss.toFixed(4);
+    sAcc.textContent = X.length ? `${correct}/${X.length}` : '–';
+    document.getElementById('sPts').textContent = X.length;
+  }
+
+  function drawAll() { drawField(); drawNet(); drawLoss(); drawStats(); }
+
+  // ---------- controls ----------
+  const playBtn = document.getElementById('play');
+  const setPlay = () => playBtn.textContent = running ? 'Pause' : 'Play';
+  playBtn.onclick = () => { running = !running; setPlay(); };
+  document.getElementById('stepBtn').onclick = () => { running = false; setPlay(); trainStep(); drawAll(); };
+  document.getElementById('reset').onclick = () => { init(); drawAll(); };
+  const hid = document.getElementById('hidden'), hidV = document.getElementById('hiddenV');
+  hid.oninput = () => { H = +hid.value; hidV.textContent = H; init(); drawAll(); };
+  document.getElementById('layers').onchange = e => { NL = +e.target.value; init(); drawAll(); };
+  document.getElementById('foldSel').onchange = e => { foldMode = e.target.value; drawAll(); };
+  document.getElementById('lr').onchange = e => lr = +e.target.value;
+  const outHead = document.getElementById('outHead'), lossNote = document.getElementById('lossNote');
+  const surfNote = document.getElementById('surfNote');
+  document.getElementById('lossSel').onchange = e => {
+    lossKey = e.target.value;
+    const lin = LOSSES[lossKey].linear;
+    outHead.textContent = lin ? 'Score' : 'Output';
+    surfNote.textContent = lin
+      ? 'Hinge losses use a raw score with labels ±1; color shows σ(score), and the boundary is where the score is 0.'
+      : 'Color shows the sigmoid output, blue toward 0 and amber toward 1.';
+    // loss scales differ, so start a fresh curve (weights are kept)
+    lossHist = []; histStride = 1; histCounter = 0; histStart = step;
+    lossNote.textContent = `${LOSSES[lossKey].name}, full dataset, log scale. Curve restarted at step ${step.toLocaleString()}.`;
+    drawAll();
+  };
+  const samplingSel = document.getElementById('sampling');
+  document.getElementById('batch').onchange = e => {
+    batchSize = +e.target.value; order = []; cursor = 0; pickRate = [];
+    samplingSel.disabled = batchSize === 0;
+    samplingSel.title = batchSize === 0 ? 'Pick a mini-batch size to enable' : '';
+  };
+  samplingSel.onchange = e => { sampling = e.target.value; order = []; cursor = 0; };
+  document.getElementById('mom').onchange = e => { momentum = +e.target.value; };
+  document.getElementById('wd').onchange = e => { weightDecay = +e.target.value; };
+  const autoDropEl = document.getElementById('autoDrop');
+  autoDropEl.onchange = () => {
+    autoDrop = autoDropEl.checked;
+    // turning it back on re-arms the schedule (keeps the current decay value)
+    if (autoDrop) { decayDropped = false; decayBefore = null; dropStep = null; }
+    schedStatus();
+    drawAll();
+  };
+  const threshIn = document.getElementById('thresh'), threshV = document.getElementById('threshV');
+  threshIn.oninput = () => { dropThreshold = +threshIn.value; threshV.textContent = dropThreshold.toFixed(3); drawAll(); };
+  const noiseIn = document.getElementById('noise'), noiseV = document.getElementById('noiseV');
+  noiseIn.oninput = () => { noiseStd = +noiseIn.value; noiseV.textContent = noiseStd === 0 ? '0' : noiseStd.toFixed(4); };
+  const sp = document.getElementById('speed'), spV = document.getElementById('speedV');
+  sp.oninput = () => { spf = +sp.value; spV.textContent = spf; };
+
+  window.addEventListener('resize', drawAll);
+
+  function loop() {
+    if (running) { for (let k = 0; k < spf; k++) trainStep(); drawAll(); }
+    requestAnimationFrame(loop);
+  }
+
+  init(); setPlay(); drawAll();
+  if (document.fonts) document.fonts.ready.then(drawAll);
+  requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>
