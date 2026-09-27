@@ -2,8 +2,8 @@
 
 An interactive, in-browser playground for training a tiny multilayer perceptron with **absolute value (ABS) activations**. Draw your own 2D dataset, pick a training setup, and watch the network fold the plane into a decision boundary in real time.
 
-**Live demo:** `https://<your-username>.github.io/<your-repo>/`
-**Blog post:** `https://<your-username>.github.io/<your-repo>/blog.html`
+**Live demo:** `https://vertinski.github.io`
+**Blog post:** `https://vertinski.com/blog/ABS-training-run.html`
 
 No build step, no frameworks, no dependencies: the network, backpropagation, optimizer and rendering are all hand-written JavaScript in a single HTML file.
 
